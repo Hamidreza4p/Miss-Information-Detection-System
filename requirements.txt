@@ -1,0 +1,16 @@
+streamlit
+fastapi
+uvicorn
+pandas
+openpyxl
+requests
+beautifulsoup4
+python-dotenv
+pydantic
+huggingface_hub
+pytest
+pytest-asyncio
+httpx
+plotly
+tavily-python
+bcrypt

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: misinfo-app
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate 
+  selector:
+    matchLabels:
+      app: misinformation
+  template:
+    metadata:
+      labels:
+        app: misinformation
+    spec:
+      containers:
+      - name: backend
+        image: 527582557235.dkr.ecr.us-east-1.amazonaws.com/misinfo_repo:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000 
+        resources:
+          requests:
+            memory: "512M"
+          limits:
+            memory: "900Mi"
+        env:
+        - name: TAVILY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: misinfo-secrets
+              key: TAVILY_API_KEY
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: misinfo-secrets
+              key: HF_TOKEN
+        - name: HF_MODEL
+          value: "meta-llama/Llama-3.1-8B-Instruct"
+        volumeMounts:
+        - name: sqlite-storage
+          mountPath: /app/backend/storage
+      imagePullSecrets:
+      - name: ecr-secret 
+      volumes:
+      - name: sqlite-storage
+        hostPath:
+          path: /home/ec2-user/misinfo_data
+          type: DirectoryOrCreate
