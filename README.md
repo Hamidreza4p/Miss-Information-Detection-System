@@ -163,7 +163,27 @@ The test module checks:
 - The prediction path attempts to store a result
 - `HF_MODEL` is configured
 
-The prediction test calls the configured retrieval and inference services; it is not a fully isolated unit test. The repository currently does not include a labeled benchmark dataset or publish accuracy, precision, recall, F1, calibration, or latency results. A responsible evaluation should use a time-stamped labeled claim set and separately measure retrieval coverage, verdict quality, JSON-parse failures, latency, and API-error behavior.
+The prediction test calls the configured retrieval and inference services; it is not a fully isolated unit test.
+
+### Reported course-project evaluation
+
+The February 2026 project report documents a closed-ended evaluation on 20 fact-checked claims sourced from professional fact-checking outlets. The set contained 13 false and 7 true claims. `uncertain` was evaluated both as an incorrect answer under strict scoring and as an abstention under selective scoring.
+
+| Metric | Reported result |
+|---|---:|
+| Strict accuracy (`uncertain` counted as incorrect) | 16/20 (80%) |
+| Coverage (decisive `real` or `fake` responses) | 16/20 (80%) |
+| Selective accuracy on decisive responses | 16/16 (100%) |
+| Abstention rate | 4/20 (20%) |
+| False claim predicted as real | 0/13 (0%) |
+| True claim predicted as fake | 0/7 (0%) |
+
+Reported prediction counts were:
+
+- Ground-truth true: 6 `real`, 0 `fake`, 1 `uncertain`
+- Ground-truth false: 0 `real`, 10 `fake`, 3 `uncertain`
+
+These figures describe one small course-project evaluation, not general model performance. The benchmark claims, source links, dates, configuration snapshot, and machine-readable run outputs are not currently committed to this repository, so the result cannot yet be independently reproduced from the repository alone. A stronger evaluation package should publish those artifacts and additionally measure retrieval quality, JSON-parse failures, latency, calibration, and API-error behavior.
 
 ## Deployment notes
 
