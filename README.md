@@ -1,121 +1,185 @@
-# 🛡️ Real-Time Misinformation Detection System
+# Evidence-Grounded Misinformation Analysis System
 
-> Submit a news article URL or raw text claim — get back a structured verdict: **Real / Fake / Uncertain**, a confidence score, and a source-grounded explanation. Powered by RAG, LLMs, and a production-ready deployment stack.
+A full-stack prototype for analyzing a raw claim or the text extracted from a news URL. The system retrieves current web evidence with Tavily, asks a Hugging Face-hosted Llama model for a structured assessment, and returns a `real`, `fake`, or `uncertain` label with a model-generated confidence value and explanation.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi)
-![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-K8s-326CE5?style=flat-square&logo=kubernetes)
-![License](https://img.shields.io/badge/License-GPLv3-green?style=flat-square)
+This project demonstrates an evidence-retrieval workflow; it is not a substitute for professional fact-checking. A verdict and confidence value are model outputs, not calibrated probabilities or independently verified ground truth.
 
----
+## Features
 
-## 🧠 What It Does
+- Raw-text and URL-based analysis
+- Paragraph extraction from web pages with Beautiful Soup
+- Tavily retrieval of up to three web-search results per analysis
+- Structured LLM output through the Hugging Face Inference API
+- FastAPI endpoints for analysis, accounts, history, feedback, and statistics
+- Streamlit dashboard with per-user history and Plotly summaries
+- SQLite persistence, bcrypt password hashing, and exact-text result caching
+- Docker packaging, Kubernetes manifests, and an AWS-oriented deployment workflow
+- Async API tests with `pytest`, `httpx`, and FastAPI's ASGI transport
 
-Misinformation spreads faster than corrections. This system tackles that problem by treating every claim as a query: it retrieves live web evidence via the **Tavily Search API**, passes both the claim and evidence to **Llama 3.1 8B** (via Hugging Face Inference API), and returns a structured verdict with a confidence score and a human-readable explanation grounded in real sources.
+## Architecture
 
-It is not a simple classifier trained on a fixed dataset — it reasons over fresh evidence at inference time, making it robust to new and evolving narratives.
+```mermaid
+flowchart LR
+    A[User] --> B[Streamlit dashboard]
+    B -->|raw text| C[FastAPI /predict]
+    B -->|article URL| D[FastAPI /analyze_url]
+    D --> E[Requests and Beautiful Soup]
+    E --> F[Extracted article text]
+    F --> G{Exact-text cache hit?}
+    C --> G
 
----
-
-## ⚙️ Architecture
-
-The system is split into three layers: intelligence, interface, and infrastructure.
-
-### 1. Backend — FastAPI
-- **RAG Pipeline**: Tavily API for real-time evidence retrieval → Llama 3.1 8B for claim verification
-- **Web Scraper**: BeautifulSoup4-based article extractor with basic bot-bypass handling
-- **Smart Caching**: SQLite-backed global cache to reduce latency and API costs on repeated queries
-- **Audit Trail**: All analyses and user feedback are logged to SQLite for traceability
-- **Auth**: User authentication with bcrypt password hashing
-
-### 2. Frontend — Streamlit Dashboard
-- Input modes: paste raw text or submit a URL for automatic scraping
-- Output: verdict label, confidence score, explanation with source references
-- Visualizations: Plotly charts showing veracity distribution across a user's history
-- Persistent analysis history filtered per user
-
-### 3. DevOps / MLOps
-- **CI/CD**: GitHub Actions pipeline — auto-builds Docker image and pushes to Amazon ECR on every push
-- **Containerization**: Full app (backend + frontend) containerized in Docker
-- **Orchestration**: Kubernetes manifests with defined resource limits and HostPath volumes for SQLite persistence
-- **Secrets management**: API tokens handled via Kubernetes Secrets
-- **Low-resource optimization**: Tuned to run an 8B parameter model via cloud Inference API, avoiding local GPU requirements
-
----
-
-## 🚀 Deployment
-
-The system supports two deployment modes:
-
-| Mode | Description |
-|------|-------------|
-| **Local (Dev)** | Single Docker image, runs both backend and frontend. Uses Linux swap for low-RAM environments. |
-| **Cloud (Prod)** | Deployed on Amazon EC2 via Kubernetes. CI/CD via GitHub Actions → Amazon ECR. |
-
-For full step-by-step instructions see [DEPLOYMENT.md](./DEPLOYMENT.md).
-
----
-
-## 🗂️ Project Structure
-
+    G -->|Yes| H[Return cached assessment]
+    G -->|No| I[Tavily web search]
+    I --> J[Evidence snippets]
+    J --> K[Llama 3.1 8B via Hugging Face Inference]
+    K --> L[Parse JSON label, confidence, explanation]
+    L --> M[SQLite history and feedback]
+    M --> B
+    H --> B
 ```
+
+## Data flow
+
+1. The user signs up or logs in through the Streamlit interface.
+2. For URL input, the backend fetches the page and joins text from its `<p>` elements.
+3. The backend checks SQLite for an exact match of the analyzed text.
+4. On a cache miss, Tavily retrieves current evidence snippets for the first 200 characters of the input.
+5. The configured Hugging Face model compares the input with that evidence and is prompted to return JSON.
+6. The backend stores the result in the user's history and exposes it to the dashboard.
+
+## Repository structure
+
+```text
+.
 ├── backend/
-│   ├── main.py            # FastAPI app & endpoints
-│   ├── rag_pipeline.py    # Tavily retrieval + LLM reasoning
-│   ├── scraper.py         # URL article extractor
-│   └── database.py        # SQLite cache & audit trail
+│   ├── llm_judge.py       # Tavily retrieval and LLM assessment
+│   ├── main.py            # FastAPI routes and request models
+│   ├── scraping.py        # URL fetch and paragraph extraction
+│   └── storage.py         # SQLite users, history, cache, and feedback
 ├── frontend/
 │   └── app.py             # Streamlit dashboard
-├── k8s/
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   └── secrets.yaml
+├── k8s/                   # Kubernetes deployment/service manifests
+├── workflows/
+│   └── deploy.yml         # AWS/ECR deployment workflow definition
+├── data/                  # SQLite database location at runtime
+├── DEPLOYMENT.md
 ├── Dockerfile
-├── .github/workflows/     # CI/CD pipeline
-└── README.md
+├── requirements.txt
+└── test_main.py
 ```
 
----
+## Installation
 
-## 🔧 Quick Start (Local)
+### Prerequisites
+
+- Python 3.10 or newer
+- A Tavily API key
+- A Hugging Face token with access to the configured inference model
+- Docker, if using the container workflow
+
+### Environment variables
+
+Create a `.env` file in the repository root:
+
+```dotenv
+TAVILY_API_KEY=your_tavily_key
+HF_TOKEN=your_huggingface_token
+HF_MODEL=meta-llama/Llama-3.1-8B-Instruct
+```
+
+Do not commit this file.
+
+### Run with Docker
 
 ```bash
-# Clone the repo
 git clone https://github.com/Hamidreza4p/Miss-Information-Detection-System.git
 cd Miss-Information-Detection-System
 
-# Set environment variables
-cp .env.example .env
-# Add your TAVILY_API_KEY and HF_API_TOKEN to .env
-
-# Run with Docker
-docker build -t misinfo-detector .
-docker run -p 8000:8000 -p 8501:8501 misinfo-detector
+docker build -t misinfo-analysis .
+docker run --rm --env-file .env -p 8000:8000 -p 8501:8501 misinfo-analysis
 ```
 
-Then open `http://localhost:8501` for the dashboard.
+Open:
 
----
+- Streamlit dashboard: `http://localhost:8501`
+- FastAPI health endpoint: `http://localhost:8000/health`
 
-## 🛠️ Tech Stack
+The container starts Uvicorn and Streamlit in the same image. The SQLite database is written under `data/`; mount that directory if you need persistence beyond the container lifecycle.
 
-| Layer | Tools |
-|-------|-------|
-| LLM & RAG | Llama 3.1 8B (HF Inference API), Tavily Search API |
-| Backend | Python, FastAPI |
-| Frontend | Streamlit, Plotly |
-| Storage | SQLite |
-| DevOps | Docker, Kubernetes, GitHub Actions, Amazon ECR/EC2 |
+### Run locally without Docker
 
----
+```bash
+python -m venv .venv
+```
 
-## 📸 Screenshots
+Activate the environment and install dependencies:
 
-*Coming soon*
+```bash
+# Linux/macOS
+source .venv/bin/activate
 
----
+# Windows PowerShell
+# .\.venv\Scripts\Activate.ps1
 
-## ⚖️ License
+pip install -r requirements.txt
+```
 
-This project is licensed under the **GNU GPLv3 License**. See the [LICENSE](./LICENSE) file for details.
+Start the backend and frontend in separate terminals from the repository root:
+
+```bash
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
+```
+
+```bash
+streamlit run frontend/app.py --server.port 8501
+```
+
+## API overview
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/health` | Service health check |
+| `POST` | `/signup` | Create a local user account |
+| `POST` | `/login` | Verify credentials and return the local user ID |
+| `POST` | `/predict` | Analyze raw text |
+| `POST` | `/analyze_url` | Extract and analyze an article URL |
+| `GET` | `/history` | Return a user's recent analyses |
+| `GET` | `/stats` | Return per-user label percentages |
+| `POST` | `/update_feedback` | Add feedback to an analysis record |
+| `POST` | `/clear_history` | Delete a user's stored analysis history |
+
+## Testing and evaluation
+
+Run the current automated tests with the same required environment variables available:
+
+```bash
+pytest -q test_main.py
+```
+
+The test module checks:
+
+- API reachability through an in-process ASGI client
+- The `/predict` response contains `label` and `confidence`
+- The prediction path attempts to store a result
+- `HF_MODEL` is configured
+
+The prediction test calls the configured retrieval and inference services; it is not a fully isolated unit test. The repository currently does not include a labeled benchmark dataset or publish accuracy, precision, recall, F1, calibration, or latency results. A responsible evaluation should use a time-stamped labeled claim set and separately measure retrieval coverage, verdict quality, JSON-parse failures, latency, and API-error behavior.
+
+## Deployment notes
+
+The repository includes Kubernetes manifests and an AWS/ECR-oriented workflow. Review all account IDs, host addresses, repository URLs, secret names, and storage paths in `DEPLOYMENT.md`, `k8s/`, and `workflows/deploy.yml` before use.
+
+GitHub only discovers Actions workflows under `.github/workflows/`. The current workflow is stored under `workflows/`, so move it to `.github/workflows/deploy.yml` and update its repository-specific values before treating it as active CI/CD.
+
+## Current limitations
+
+- Web extraction reads paragraph elements and can fail on paywalls, client-rendered sites, or anti-bot controls.
+- Evidence quality depends on the search query, returned sources, and the current state of the web.
+- The parser falls back to `uncertain` when inference or JSON extraction fails.
+- Exact-text caching is global across users and does not account for evidence changing over time.
+- The displayed confidence is generated by the LLM and is not calibrated.
+
+## License
+
+Licensed under the GNU General Public License v3.0. See [LICENSE](./LICENSE).
+
